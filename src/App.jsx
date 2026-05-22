@@ -779,17 +779,17 @@ function PresenterMode({ slides, startIndex, onClose, onFinish }) {
           transform: "rotate(-0.5deg)",
         }}>
           <div style={{
-            position: "absolute", top: -16, left: 24,
-            background: theme.accent, padding: "4px 14px",
+            position: "absolute", top: -12, left: 20,
+            background: theme.accent, padding: "3px 10px",
             color: theme.bg, fontFamily: "'Bungee', sans-serif",
-            fontSize: 12, letterSpacing: 3, textTransform: "uppercase",
+            fontSize: 10, letterSpacing: 2, textTransform: "uppercase",
             boxShadow: `2px 2px 0 ${theme.bg}`,
           }}>★ Mic Drop ★</div>
           <p style={{
             color: theme.text, fontFamily: "'Bungee', sans-serif",
-            fontSize: "clamp(14px, 2.2vw, 28px)", lineHeight: 1.2, margin: 0,
-            textShadow: `2px 2px 0 ${theme.accent}`,
-            textTransform: "uppercase", letterSpacing: "-0.02em", wordBreak: "break-word",
+            fontSize: "clamp(11px, 1.6vw, 20px)", lineHeight: 1.3, margin: 0,
+            textShadow: `1px 1px 0 ${theme.accent}`,
+            textTransform: "uppercase", letterSpacing: "-0.01em", wordBreak: "break-word",
           }}>"{c.closingBurn}" <span style={{ color: theme.accent }}>🎤</span></p>
         </div>
       </div>
@@ -1058,11 +1058,22 @@ function HostView({ slides, presented, onMarkPresented, onClearAll, onLogout, on
   };
 
   const handlePresentFinish = () => {
+    let stillHasMore = false;
     if (presentingIdx !== null) {
       const slide = slides[presentingIdx];
-      if (slide && !presented.includes(slide.id)) onMarkPresented(slide.id);
+      if (slide && !presented.includes(slide.id)) {
+        onMarkPresented(slide.id);
+        // Check if there will be more unpresented after this one
+        stillHasMore = slides.filter(s => !presented.includes(s.id) && s.id !== slide.id).length > 0;
+      } else {
+        stillHasMore = unpresented.length > 0;
+      }
     }
     setPresentingIdx(null);
+    // Auto-reopen the wheel for the next random pick
+    if (stillHasMore) {
+      setTimeout(() => setShowWheel(true), 400);
+    }
   };
 
   return (
