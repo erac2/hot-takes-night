@@ -98,8 +98,7 @@ function saveLocal(key, val) {
 async function generateSlideContent(name, opinion, userReasons) {
   const hasReasons = userReasons.length > 0;
   const fallback = {
-    headline: opinion.length > 50 ? opinion.slice(0, 47) + "..." : opinion,
-    tagline: `${name} is ready to die on this hill.`,
+    headline: opinion,
     defensePoints: hasReasons ? userReasons : null,
     closingBurn: "I said what I said.",
     emoji: "🔥",
@@ -132,28 +131,35 @@ async function generateSlideContent(name, opinion, userReasons) {
 PRESENTER: ${name}
 HOT TAKE: "${opinion}"${reasonsHint}
 
-CRITICAL LENGTH RULES (must fit on one slide):
-- headline: 4-8 words MAX. Punchy, declarative, no question marks.
-- tagline: 10-15 words MAX. One sentence that hypes the take.
-- closingBurn: 8-14 words MAX. THE MIC DROP — see rules below.
+🚨 CRITICAL RULE FOR HEADLINE 🚨
+The headline MUST be the presenter's actual opinion, copied EXACTLY word-for-word. DO NOT reinterpret, paraphrase, condense, trim, shorten, or modify the opinion in ANY way. Even if it's long, return it verbatim. The frontend handles font sizing to make it fit.
 
-MIC DROP (closingBurn) IS THE STAR — make it JUICY:
-- Should feel like the last line of a text rant — confident, weird, oddly poetic, RIDES for the take.
-- Use unexpected imagery, contradictions, or vibes-based logic. Be specific, not generic.
+Examples:
+- Opinion: "Pineapple on pizza is elite" → headline: "Pineapple on pizza is elite"
+- Opinion: "I genuinely believe that working from home is bad for your career long-term" → headline: "I genuinely believe that working from home is bad for your career long-term"
+- Opinion: "Cereal is just cold soup" → headline: "Cereal is just cold soup"
+
+DO NOT do this:
+- ❌ Condense to "Working from home kills your career"
+- ❌ Paraphrase to "WFH is career suicide"
+- ❌ Trim to "Working from home is bad"
+- The headline is a DIRECT QUOTE of the presenter, not your remix.
+
+MIC DROP (closingBurn) — make it JUICY (8-14 words):
+- Last line of a text rant — confident, weird, oddly poetic, RIDES for the take.
+- Use unexpected imagery, contradictions, or vibes-based logic.
 - DO NOT explain or justify. DO NOT moralize. Just drop the line and walk away.
-- DO NOT use "Period." or "End of story" or "Facts." — too tired.
-- Examples of the vibe we want:
+- DO NOT use "Period." or "End of story" or "Facts."
+- Examples of the vibe:
   * "Sometimes you just gotta mind your business while kissing strangers."
   * "I'd rather be wrong and interesting than right and boring."
   * "The vibes were immaculate, the data was secondary."
-  * "Tell your therapist, not me."
   * "Cry about it in 4K."
   * "Built different, raised wrong, never apologized."
   * "If you know, you know. If you don't, stay mad."
-- Match the energy and subject of the actual opinion — don't be generic.
 
 Respond with ONLY this JSON (no markdown, no backticks):
-{"headline":"4-8 word punchy title","tagline":"10-15 word hype subtitle","defensePoints":${hasReasons ? '["use","provided","reasons"]' : 'null'},"closingBurn":"juicy 8-14 word mic-drop","emoji":"single emoji that matches the topic","category":"2-3 word topic like FOOD TAKE or DATING TAKE","reactions":["3 reaction emojis matching the vibe"]}
+{"headline":"The opinion copied VERBATIM — never modified","defensePoints":${hasReasons ? '["use","provided","reasons"]' : 'null'},"closingBurn":"juicy 8-14 word mic-drop","emoji":"single emoji that matches the topic","category":"2-3 word topic like FOOD TAKE or DATING TAKE","reactions":["3 reaction emojis matching the vibe"]}
 
 ${hasReasons ? "IMPORTANT: Use the presenter's reasons verbatim as defensePoints." : "IMPORTANT: defensePoints MUST be null — presenter didn't provide any."}`
         }]
@@ -173,14 +179,12 @@ ${hasReasons ? "IMPORTANT: Use the presenter's reasons verbatim as defensePoints
     const parsed = JSON.parse(cleaned.slice(start, end + 1));
     if (!parsed.headline) return fallback;
 
-    let headline = parsed.headline;
-    if (headline.split(" ").length > 9) headline = headline.split(" ").slice(0, 8).join(" ") + "...";
+    const headline = parsed.headline || opinion;
     let closingBurn = parsed.closingBurn || fallback.closingBurn;
     if (closingBurn.split(" ").length > 16) closingBurn = closingBurn.split(" ").slice(0, 14).join(" ") + "...";
 
     return {
       headline,
-      tagline: parsed.tagline || fallback.tagline,
       defensePoints: hasReasons ? userReasons : null,
       closingBurn,
       emoji: parsed.emoji || fallback.emoji,
@@ -709,26 +713,29 @@ function PresenterMode({ slides, startIndex, onClose, onFinish }) {
         <div style={{
           background: `linear-gradient(135deg, ${theme.accent}22 0%, ${theme.bg}00 100%)`,
           borderLeft: `8px solid ${theme.accent}`, padding: "20px 28px",
-          marginBottom: 24, maxWidth: "92%",
+          marginBottom: hasReasons ? 32 : 40, maxWidth: "92%",
           animation: "slideUp 0.7s 0.35s cubic-bezier(0.16,1,0.3,1) both",
         }}>
           <h1 style={{
             fontFamily: "'Bungee', sans-serif", color: theme.text,
-            fontSize: `clamp(22px, ${hasReasons ? "4.5vw" : "5.5vw"}, ${hasReasons ? "56px" : "72px"})`,
-            lineHeight: 1.05, letterSpacing: "-0.02em", margin: 0,
+            fontSize: (() => {
+              const len = c.headline.length;
+              // Scale: very short → big, very long → small
+              // Tiers based on character count
+              let maxPx, vw;
+              if (len <= 25)       { maxPx = hasReasons ? 64 : 80; vw = hasReasons ? 5.2 : 6.4; }
+              else if (len <= 45)  { maxPx = hasReasons ? 52 : 64; vw = hasReasons ? 4.2 : 5.2; }
+              else if (len <= 70)  { maxPx = hasReasons ? 40 : 50; vw = hasReasons ? 3.3 : 4.0; }
+              else if (len <= 100) { maxPx = hasReasons ? 32 : 40; vw = hasReasons ? 2.6 : 3.2; }
+              else if (len <= 140) { maxPx = hasReasons ? 26 : 32; vw = hasReasons ? 2.1 : 2.6; }
+              else                 { maxPx = hasReasons ? 22 : 28; vw = hasReasons ? 1.8 : 2.2; }
+              return `clamp(18px, ${vw}vw, ${maxPx}px)`;
+            })(),
+            lineHeight: 1.1, letterSpacing: "-0.02em", margin: 0,
             textShadow: `3px 3px 0 ${theme.accent}, 6px 6px 0 ${theme.accent2}66`,
             textTransform: "uppercase", wordBreak: "break-word",
           }}>"{c.headline}"</h1>
         </div>
-
-        <p style={{
-          color: theme.glow, fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600,
-          fontSize: hasReasons ? "clamp(15px, 1.9vw, 21px)" : "clamp(17px, 2.3vw, 26px)",
-          lineHeight: 1.35, maxWidth: 800,
-          margin: hasReasons ? "0 0 30px" : "0 0 38px",
-          animation: "slideUp 0.7s 0.5s cubic-bezier(0.16,1,0.3,1) both",
-          padding: "0 12px", borderLeft: `3px dotted ${theme.glow}66`,
-        }}>{c.tagline}</p>
 
         {hasReasons && (
           <div style={{ display: "flex", flexDirection: "column", gap: 12, maxWidth: 880, marginBottom: 28 }}>
