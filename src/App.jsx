@@ -1184,17 +1184,6 @@ function HostView({ slides, onMarkPresented, onLogout, onRefresh }) {
         </div>
       )}
 
-      {slides.length > 0 && (
-        <div style={{
-          background: "#0a0a0a", border: "1px solid #222",
-          padding: "12px 16px", marginBottom: 22,
-          color: "#888", fontFamily: "'Space Grotesk', sans-serif",
-          fontSize: 11, letterSpacing: 1, lineHeight: 1.5,
-        }}>
-          💡 The Google Sheet is the source of truth. To remove someone, delete their row. To un-present someone, clear their "presented" column in the sheet, then hit 🔄 Sync.
-        </div>
-      )}
-
       {slides.length === 0 ? (
         <div style={{ textAlign: "center", padding: "100px 20px", color: "#444", fontFamily: "'Bungee', sans-serif", fontSize: 24, textTransform: "uppercase", letterSpacing: 1 }}>
           No submissions yet 👀<br />
