@@ -126,27 +126,15 @@ async function generateSlideContent(name, opinion, userReasons) {
         max_tokens: 1000,
         messages: [{
           role: "user",
-          content: `You're crafting a presentation slide for "Unpopular Opinions Night" — a fun party game. Tone is unhinged, confident, terminally online, slightly absurd. Think tweet-that-goes-viral energy.
+          content: `You're crafting supporting content for a presentation slide for "Unpopular Opinions Night" — a fun party game. Tone is unhinged, confident, terminally online, slightly absurd. Think tweet-that-goes-viral energy.
 
 PRESENTER: ${name}
-HOT TAKE: "${opinion}"${reasonsHint}
+THE OPINION (already displayed on the slide as-is — do NOT echo it): "${opinion}"${reasonsHint}
 
-🚨 CRITICAL RULE FOR HEADLINE 🚨
-The headline MUST be the presenter's actual opinion, copied EXACTLY word-for-word. DO NOT reinterpret, paraphrase, condense, trim, shorten, or modify the opinion in ANY way. Even if it's long, return it verbatim. The frontend handles font sizing to make it fit.
-
-Examples:
-- Opinion: "Pineapple on pizza is elite" → headline: "Pineapple on pizza is elite"
-- Opinion: "I genuinely believe that working from home is bad for your career long-term" → headline: "I genuinely believe that working from home is bad for your career long-term"
-- Opinion: "Cereal is just cold soup" → headline: "Cereal is just cold soup"
-
-DO NOT do this:
-- ❌ Condense to "Working from home kills your career"
-- ❌ Paraphrase to "WFH is career suicide"
-- ❌ Trim to "Working from home is bad"
-- The headline is a DIRECT QUOTE of the presenter, not your remix.
+Your job: generate a juicy mic-drop line, emoji, category, and reactions that SUPPORT this opinion. Do NOT restate the opinion.
 
 MIC DROP (closingBurn) — make it JUICY (8-14 words):
-- Last line of a text rant — confident, weird, oddly poetic, RIDES for the take.
+- The last line of a text rant — confident, weird, oddly poetic, RIDES for the take.
 - Use unexpected imagery, contradictions, or vibes-based logic.
 - DO NOT explain or justify. DO NOT moralize. Just drop the line and walk away.
 - DO NOT use "Period." or "End of story" or "Facts."
@@ -157,11 +145,12 @@ MIC DROP (closingBurn) — make it JUICY (8-14 words):
   * "Cry about it in 4K."
   * "Built different, raised wrong, never apologized."
   * "If you know, you know. If you don't, stay mad."
+- Match the topic of the actual opinion — be specific, not generic.
 
 Respond with ONLY this JSON (no markdown, no backticks):
-{"headline":"The opinion copied VERBATIM — never modified","defensePoints":${hasReasons ? '["use","provided","reasons"]' : 'null'},"closingBurn":"juicy 8-14 word mic-drop","emoji":"single emoji that matches the topic","category":"2-3 word topic like FOOD TAKE or DATING TAKE","reactions":["3 reaction emojis matching the vibe"]}
+{"closingBurn":"juicy 8-14 word mic-drop","emoji":"single emoji that matches the opinion's topic","category":"2-3 word topic like FOOD TAKE or DATING TAKE","reactions":["3 reaction emojis matching the vibe"]}
 
-${hasReasons ? "IMPORTANT: Use the presenter's reasons verbatim as defensePoints." : "IMPORTANT: defensePoints MUST be null — presenter didn't provide any."}`
+${hasReasons ? "Use the presenter's reasons verbatim as the slide's defense points (handled by the app, not you)." : ""}`
         }]
       })
     });
@@ -179,7 +168,7 @@ ${hasReasons ? "IMPORTANT: Use the presenter's reasons verbatim as defensePoints
     const parsed = JSON.parse(cleaned.slice(start, end + 1));
     if (!parsed.headline) return fallback;
 
-    const headline = parsed.headline || opinion;
+    const headline = opinion; // ALWAYS use the actual opinion, never AI version
     let closingBurn = parsed.closingBurn || fallback.closingBurn;
     if (closingBurn.split(" ").length > 16) closingBurn = closingBurn.split(" ").slice(0, 14).join(" ") + "...";
 
@@ -798,7 +787,7 @@ function PresenterMode({ slides, startIndex, onClose, onFinish }) {
           }}>★ Mic Drop ★</div>
           <p style={{
             color: theme.text, fontFamily: "'Bungee', sans-serif",
-            fontSize: "clamp(20px, 3.2vw, 42px)", lineHeight: 1.1, margin: 0,
+            fontSize: "clamp(14px, 2.2vw, 28px)", lineHeight: 1.2, margin: 0,
             textShadow: `2px 2px 0 ${theme.accent}`,
             textTransform: "uppercase", letterSpacing: "-0.02em", wordBreak: "break-word",
           }}>"{c.closingBurn}" <span style={{ color: theme.accent }}>🎤</span></p>
