@@ -293,10 +293,11 @@ function ComicBurst({ color, size = 200, children, style = {} }) {
 }
 
 // ─── Spin Wheel ───────────────────────────────────────────────────────────────
-function SpinWheel({ candidates, onPick, onCancel }) {
+function SpinWheel({ candidates, onPick, onCancel, autoSpin = false }) {
   const [rotation, setRotation] = useState(0);
   const [spinning, setSpinning] = useState(false);
   const [winner, setWinner] = useState(null);
+  const hasAutoSpun = useRef(false);
 
   const slices = candidates.length;
   const sliceAngle = 360 / slices;
@@ -311,6 +312,28 @@ function SpinWheel({ candidates, onPick, onCancel }) {
     setRotation(prev => prev + finalRotation);
     setTimeout(() => { setSpinning(false); setWinner(candidates[targetIndex]); }, 4200);
   };
+
+  // Auto-spin on open if triggered from previous presentation
+  useEffect(() => {
+    if (autoSpin && !hasAutoSpun.current && slices > 0) {
+      hasAutoSpun.current = true;
+      setTimeout(() => spin(), 600); // small delay so user sees the wheel before it spins
+    }
+  }, [autoSpin, slices]);
+
+  // Spacebar/Enter on winner screen → present
+  useEffect(() => {
+    const onKey = (e) => {
+      if ((e.key === " " || e.key === "Enter") && winner) {
+        e.preventDefault();
+        onPick(winner);
+      } else if (e.key === "Escape") {
+        onCancel();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [winner, onPick, onCancel]);
 
   return (
     <div style={{
@@ -474,7 +497,12 @@ function PresenterMode({ slides, startIndex, onClose, onFinish }) {
 
   useEffect(() => {
     const onKey = (e) => {
-      if (e.key === "ArrowRight" || e.key === " " || e.key === "Enter") { e.preventDefault(); next(); }
+      if (e.key === "ArrowRight" || e.key === " " || e.key === "Enter") {
+        e.preventDefault();
+        // If we're already on the end slide, pressing space/enter/→ triggers next-up flow
+        if (isEnd) handleClose();
+        else next();
+      }
       else if (e.key === "ArrowLeft") { e.preventDefault(); prev(); }
       else if (e.key === "Escape") handleClose();
       else if (e.key === "f" || e.key === "F") {
@@ -484,7 +512,7 @@ function PresenterMode({ slides, startIndex, onClose, onFinish }) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [next, prev]);
+  }, [next, prev, isEnd]);
 
   const [touchStart, setTouchStart] = useState(null);
   const onTouchStart = (e) => setTouchStart(e.touches[0].clientX);
@@ -520,21 +548,27 @@ function PresenterMode({ slides, startIndex, onClose, onFinish }) {
           <div style={{ fontSize: "clamp(70px, 14vw, 140px)", animation: "shake 0.5s ease infinite", marginBottom: 10 }}>🎤</div>
           <h1 style={{
             fontFamily: "'Bungee', sans-serif", color: "#fff",
-            fontSize: "clamp(48px, 11vw, 120px)", margin: "10px 0 20px", lineHeight: 0.9, letterSpacing: "-0.04em",
+            fontSize: "clamp(40px, 9vw, 96px)", margin: "10px 0 20px", lineHeight: 0.9, letterSpacing: "-0.04em",
             background: `linear-gradient(90deg, ${THEMES.map(t => t.accent).join(", ")})`,
             WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
             backgroundSize: "200% 100%", animation: "rainbowShift 3s linear infinite",
             textTransform: "uppercase",
-          }}>That's a Wrap!</h1>
+          }}>Mic Dropped 🎤</h1>
           <p style={{ color: "#fff", fontFamily: "'Space Grotesk', sans-serif", fontWeight: 800, fontSize: 14, letterSpacing: 6, textTransform: "uppercase" }}>
-            Done · zero regrets
+            Who's up next?
           </p>
           <button onClick={handleClose} style={{
-            marginTop: 30, background: "#fff", color: "#000",
-            border: "none", padding: "14px 28px",
-            fontFamily: "'Bungee', sans-serif", fontSize: 12, letterSpacing: 3,
+            marginTop: 30,
+            background: `linear-gradient(90deg, ${THEMES.map(t => t.accent).join(", ")})`,
+            backgroundSize: "200% 100%", animation: "rainbowShift 3s linear infinite",
+            color: "#000", border: "none", padding: "18px 36px",
+            fontFamily: "'Bungee', sans-serif", fontSize: 16, letterSpacing: 3,
             textTransform: "uppercase", cursor: "pointer",
-          }}>← Back to Wheel</button>
+            boxShadow: "0 0 30px rgba(255,255,255,0.4)",
+          }}>🎡 Spin for Next!</button>
+          <p style={{ color: "#888", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: 3, marginTop: 16, textTransform: "uppercase" }}>
+            or press <span style={{ color: "#fff", padding: "2px 8px", border: "1px solid #444", background: "#111" }}>SPACE</span> / <span style={{ color: "#fff", padding: "2px 8px", border: "1px solid #444", background: "#111" }}>→</span>
+          </p>
         </div>
       </div>
     );
@@ -787,9 +821,9 @@ function PresenterMode({ slides, startIndex, onClose, onFinish }) {
           }}>★ Mic Drop ★</div>
           <p style={{
             color: theme.text, fontFamily: "'Bungee', sans-serif",
-            fontSize: "clamp(11px, 1.6vw, 20px)", lineHeight: 1.3, margin: 0,
+            fontSize: "clamp(10px, 1.3vw, 16px)", lineHeight: 1.4, margin: 0,
             textShadow: `1px 1px 0 ${theme.accent}`,
-            textTransform: "uppercase", letterSpacing: "-0.01em", wordBreak: "break-word",
+            textTransform: "uppercase", letterSpacing: "0", wordBreak: "break-word",
           }}>"{c.closingBurn}" <span style={{ color: theme.accent }}>🎤</span></p>
         </div>
       </div>
@@ -1048,6 +1082,7 @@ function HostView({ slides, presented, onMarkPresented, onClearAll, onLogout, on
   const [presentingIdx, setPresentingIdx] = useState(null);
   const [showWheel, setShowWheel] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
+  const [autoSpinTrigger, setAutoSpinTrigger] = useState(0); // bumps to force a fresh spin
 
   const unpresented = slides.filter(s => !presented.includes(s.id));
 
@@ -1057,24 +1092,32 @@ function HostView({ slides, presented, onMarkPresented, onClearAll, onLogout, on
     setPresentingIdx(idx);
   };
 
-  const handlePresentFinish = () => {
-    let stillHasMore = false;
+  // Called when slides finish — refresh sheet data, then auto-open wheel for next pick
+  const handlePresentFinish = async () => {
     if (presentingIdx !== null) {
       const slide = slides[presentingIdx];
       if (slide && !presented.includes(slide.id)) {
         onMarkPresented(slide.id);
-        // Check if there will be more unpresented after this one
-        stillHasMore = slides.filter(s => !presented.includes(s.id) && s.id !== slide.id).length > 0;
-      } else {
-        stillHasMore = unpresented.length > 0;
       }
     }
     setPresentingIdx(null);
-    // Auto-reopen the wheel for the next random pick
-    if (stillHasMore) {
-      setTimeout(() => setShowWheel(true), 400);
-    }
+
+    // Pull latest data from Google Sheets (in case new submissions came in)
+    await onRefresh();
+
+    // Trigger wheel auto-open after a brief beat
+    setTimeout(() => setAutoSpinTrigger(prev => prev + 1), 300);
   };
+
+  // When autoSpinTrigger changes, open the wheel if there are still unrevealed takes
+  useEffect(() => {
+    if (autoSpinTrigger === 0) return; // skip initial render
+    // Re-check unpresented count from latest state
+    const remaining = slides.filter(s => !presented.includes(s.id));
+    if (remaining.length > 0) {
+      setShowWheel(true);
+    }
+  }, [autoSpinTrigger]);
 
   return (
     <div style={{ padding: "32px 24px", maxWidth: 1200, margin: "0 auto" }}>
@@ -1165,6 +1208,7 @@ function HostView({ slides, presented, onMarkPresented, onClearAll, onLogout, on
           candidates={unpresented}
           onPick={handlePickFromWheel}
           onCancel={() => setShowWheel(false)}
+          autoSpin={autoSpinTrigger > 0}
         />
       )}
 
