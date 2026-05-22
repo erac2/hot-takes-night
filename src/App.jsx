@@ -1,13 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
-const HOST_PASSWORD = "hottest-takes-2024"; // ← change this if you want
+const HOST_PASSWORD = "hottest-takes-2024";
 const SHEETS_URL = import.meta.env.VITE_SHEETS_URL || "";
 const ANTHROPIC_KEY = import.meta.env.VITE_ANTHROPIC_KEY || "";
-
-// LocalStorage keys (used as fallback when sheets unavailable)
-const STORAGE_KEY = "uon-slides-v1";
-const PRESENTED_KEY = "uon-presented-v1";
 
 const THEMES = [
   { name: "INFERNO",  bg: "#1a0000", bgGrad: "#330000", accent: "#ff2d2d", accent2: "#ff6b6b", glow: "#ff4444", text: "#fff5f0", emoji: "🔥", vibe: "SCORCHING" },
@@ -44,23 +40,38 @@ async function syncToSheets(slide) {
       mode: "no-cors",
       headers: { "Content-Type": "text/plain" },
       body: JSON.stringify({
+        action: "submit",
         id: slide.id,
         name: slide.name,
         opinion: slide.opinion,
         reasons: (slide.content.defensePoints || []).join(" | "),
         headline: slide.content.headline,
-        tagline: slide.content.tagline,
         closingBurn: slide.content.closingBurn,
         category: slide.content.category,
         emoji: slide.content.emoji,
         timestamp: new Date().toISOString(),
       }),
     });
-    console.log("✅ Sheets request sent (no-cors mode hides response — check the sheet directly)");
+    console.log("✅ Sheets request sent");
     return { ok: true };
   } catch (e) {
     console.error("❌ Sheets sync failed:", e);
     return { ok: false, error: e.message };
+  }
+}
+
+async function markPresentedInSheet(id) {
+  if (!SHEETS_URL) return;
+  try {
+    await fetch(SHEETS_URL, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify({ action: "markPresented", id }),
+    });
+    console.log("✅ Marked presented in sheet:", id);
+  } catch (e) {
+    console.error("❌ Mark presented failed:", e);
   }
 }
 
@@ -83,15 +94,6 @@ async function loadFromSheets() {
     console.error("❌ Sheets load failed:", e);
     return [];
   }
-}
-
-// ─── localStorage fallback ────────────────────────────────────────────────────
-function loadLocal(key) {
-  try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : []; }
-  catch { return []; }
-}
-function saveLocal(key, val) {
-  try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) {}
 }
 
 // ─── AI: Anthropic API ────────────────────────────────────────────────────────
@@ -1078,13 +1080,14 @@ function GuestView({ onSubmit, submitted, onAnother, currentSlideCount }) {
 }
 
 // ─── Host View ────────────────────────────────────────────────────────────────
-function HostView({ slides, presented, onMarkPresented, onClearAll, onLogout, onRefresh }) {
+function HostView({ slides, onMarkPresented, onLogout, onRefresh }) {
   const [presentingIdx, setPresentingIdx] = useState(null);
   const [showWheel, setShowWheel] = useState(false);
-  const [confirmClear, setConfirmClear] = useState(false);
-  const [autoSpinTrigger, setAutoSpinTrigger] = useState(0); // bumps to force a fresh spin
+  const [autoSpinTrigger, setAutoSpinTrigger] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const unpresented = slides.filter(s => !presented.includes(s.id));
+  const unpresented = slides.filter(s => !s.presented);
+  const presentedCount = slides.filter(s => s.presented).length;
 
   const handlePickFromWheel = (winner) => {
     setShowWheel(false);
@@ -1092,32 +1095,36 @@ function HostView({ slides, presented, onMarkPresented, onClearAll, onLogout, on
     setPresentingIdx(idx);
   };
 
-  // Called when slides finish — refresh sheet data, then auto-open wheel for next pick
   const handlePresentFinish = async () => {
     if (presentingIdx !== null) {
       const slide = slides[presentingIdx];
-      if (slide && !presented.includes(slide.id)) {
-        onMarkPresented(slide.id);
+      if (slide && !slide.presented) {
+        await onMarkPresented(slide.id);
       }
     }
     setPresentingIdx(null);
 
-    // Pull latest data from Google Sheets (in case new submissions came in)
+    // Pull latest data from Google Sheets
+    setRefreshing(true);
     await onRefresh();
+    setRefreshing(false);
 
-    // Trigger wheel auto-open after a brief beat
     setTimeout(() => setAutoSpinTrigger(prev => prev + 1), 300);
   };
 
-  // When autoSpinTrigger changes, open the wheel if there are still unrevealed takes
   useEffect(() => {
-    if (autoSpinTrigger === 0) return; // skip initial render
-    // Re-check unpresented count from latest state
-    const remaining = slides.filter(s => !presented.includes(s.id));
+    if (autoSpinTrigger === 0) return;
+    const remaining = slides.filter(s => !s.presented);
     if (remaining.length > 0) {
       setShowWheel(true);
     }
   }, [autoSpinTrigger]);
+
+  const doRefresh = async () => {
+    setRefreshing(true);
+    await onRefresh();
+    setRefreshing(false);
+  };
 
   return (
     <div style={{ padding: "32px 24px", maxWidth: 1200, margin: "0 auto" }}>
@@ -1127,15 +1134,17 @@ function HostView({ slides, presented, onMarkPresented, onClearAll, onLogout, on
             🎯 Host Dashboard
           </h2>
           <p style={{ color: "#888", fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 11, letterSpacing: 2, margin: 0, textTransform: "uppercase" }}>
-            {slides.length} submission{slides.length !== 1 ? "s" : ""} · {presented.length} presented · {unpresented.length} sealed
+            {slides.length} in sheet · {presentedCount} presented · {unpresented.length} sealed
+            {refreshing && <span style={{ marginLeft: 8, color: "#ff8800" }}>· syncing...</span>}
           </p>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={onRefresh} style={{
-            background: "transparent", color: "#aaa", border: "2px solid #1e1e1e",
+          <button onClick={doRefresh} disabled={refreshing} style={{
+            background: "transparent", color: refreshing ? "#444" : "#aaa", border: "2px solid #1e1e1e",
             padding: "8px 14px", fontFamily: "'Space Grotesk', sans-serif",
-            fontWeight: 700, fontSize: 10, letterSpacing: 2, textTransform: "uppercase", cursor: "pointer",
-          }}>🔄 Sync</button>
+            fontWeight: 700, fontSize: 10, letterSpacing: 2, textTransform: "uppercase",
+            cursor: refreshing ? "wait" : "pointer",
+          }}>{refreshing ? "⏳ Syncing" : "🔄 Sync"}</button>
           <button onClick={onLogout} style={{
             background: "transparent", color: "#888", border: "2px solid #1e1e1e",
             padding: "8px 14px", fontFamily: "'Space Grotesk', sans-serif",
@@ -1176,15 +1185,13 @@ function HostView({ slides, presented, onMarkPresented, onClearAll, onLogout, on
       )}
 
       {slides.length > 0 && (
-        <div style={{ display: "flex", gap: 8, marginBottom: 22, flexWrap: "wrap" }}>
-          {confirmClear
-            ? <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                <span style={{ color: "#aaa", fontFamily: "'Space Grotesk', sans-serif", fontSize: 12 }}>Clear local cache (sheet stays)?</span>
-                <button onClick={() => { onClearAll(); setConfirmClear(false); }} style={{ background: "#ff2d2d", color: "#fff", border: "none", padding: "8px 16px", fontFamily: "'Bungee', sans-serif", fontSize: 11, cursor: "pointer", letterSpacing: 2, textTransform: "uppercase" }}>Yes</button>
-                <button onClick={() => setConfirmClear(false)} style={{ background: "transparent", color: "#666", border: "2px solid #222", padding: "8px 16px", fontFamily: "'Space Grotesk', sans-serif", fontSize: 11, cursor: "pointer", letterSpacing: 2, textTransform: "uppercase" }}>Cancel</button>
-              </div>
-            : <button onClick={() => setConfirmClear(true)} style={{ background: "transparent", color: "#666", border: "2px solid #1a1a1a", padding: "8px 14px", fontFamily: "'Space Grotesk', sans-serif", fontSize: 10, letterSpacing: 2, textTransform: "uppercase", cursor: "pointer" }}>Reset Presented Status</button>
-          }
+        <div style={{
+          background: "#0a0a0a", border: "1px solid #222",
+          padding: "12px 16px", marginBottom: 22,
+          color: "#888", fontFamily: "'Space Grotesk', sans-serif",
+          fontSize: 11, letterSpacing: 1, lineHeight: 1.5,
+        }}>
+          💡 The Google Sheet is the source of truth. To remove someone, delete their row. To un-present someone, clear their "presented" column in the sheet, then hit 🔄 Sync.
         </div>
       )}
 
@@ -1198,7 +1205,7 @@ function HostView({ slides, presented, onMarkPresented, onClearAll, onLogout, on
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 14 }}>
           {slides.map((slide, i) => (
-            <MysteryCard key={slide.id} slide={slide} index={i} presented={presented.includes(slide.id)} />
+            <MysteryCard key={slide.id} slide={slide} index={i} presented={slide.presented} />
           ))}
         </div>
       )}
@@ -1264,49 +1271,34 @@ function PasswordGate({ onUnlock }) {
 // ─── Main App ─────────────────────────────────────────────────────────────────
 export default function App() {
   const [view, setView] = useState("guest");
-  const [slides, setSlides] = useState([]);
-  const [presented, setPresented] = useState([]);
+  const [slides, setSlides] = useState([]); // every slide has a .presented bool from sheet
   const [submitted, setSubmitted] = useState(false);
   const [ready, setReady] = useState(false);
 
   const refreshFromSheets = async () => {
     const remote = await loadFromSheets();
-    if (remote.length === 0) {
-      // Fall back to local cache
-      const cached = loadLocal(STORAGE_KEY);
-      setSlides(cached);
-    } else {
-      setSlides(remote);
-      saveLocal(STORAGE_KEY, remote);
-    }
+    setSlides(remote);
   };
 
   useEffect(() => {
     (async () => {
       await refreshFromSheets();
-      setPresented(loadLocal(PRESENTED_KEY));
       setReady(true);
     })();
   }, []);
 
   const handleSubmit = async (slide) => {
-    const updated = [...slides, slide];
-    setSlides(updated);
-    saveLocal(STORAGE_KEY, updated);
+    // Optimistically add locally, then sync to sheet, then refresh from sheet
     await syncToSheets(slide);
+    // Wait a beat for sheet to register, then refresh from sheet
+    setTimeout(refreshFromSheets, 1500);
     setSubmitted(true);
   };
 
-  const handleMarkPresented = (id) => {
-    if (presented.includes(id)) return;
-    const updated = [...presented, id];
-    setPresented(updated);
-    saveLocal(PRESENTED_KEY, updated);
-  };
-
-  const handleClearPresented = () => {
-    setPresented([]);
-    saveLocal(PRESENTED_KEY, []);
+  const handleMarkPresented = async (id) => {
+    // Mark in sheet AND optimistically update local state
+    await markPresentedInSheet(id);
+    setSlides(prev => prev.map(s => s.id === id ? { ...s, presented: true } : s));
   };
 
   if (!ready) return (
@@ -1390,7 +1382,7 @@ export default function App() {
 
       {view === "guest" && <GuestView onSubmit={handleSubmit} submitted={submitted} onAnother={() => setSubmitted(false)} currentSlideCount={slides.length} />}
       {view === "host-gate" && <PasswordGate onUnlock={() => setView("host")} />}
-      {view === "host" && <HostView slides={slides} presented={presented} onMarkPresented={handleMarkPresented} onClearAll={handleClearPresented} onLogout={() => setView("guest")} onRefresh={refreshFromSheets} />}
+      {view === "host" && <HostView slides={slides} onMarkPresented={handleMarkPresented} onLogout={() => setView("guest")} onRefresh={refreshFromSheets} />}
     </div>
   );
 }
