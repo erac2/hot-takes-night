@@ -385,35 +385,46 @@ function SpinWheel({ candidates, onPick, onCancel, autoSpin = false }) {
 
       <div style={{
         position: "relative",
-        width: "min(85vw, 480px)", height: "min(85vw, 480px)",
+        width: "min(85vw, 500px)", height: "min(85vw, 500px)",
         zIndex: 2,
       }}>
-        {/* White glowing pointer at top */}
+        {/* Glowing pointer at top */}
         <div style={{
-          position: "absolute", top: -20, left: "50%", transform: "translateX(-50%)",
+          position: "absolute", top: -22, left: "50%", transform: "translateX(-50%)",
           width: 0, height: 0,
-          borderLeft: "26px solid transparent", borderRight: "26px solid transparent",
-          borderTop: "42px solid #fff",
-          filter: "drop-shadow(0 0 16px rgba(255,255,255,1)) drop-shadow(0 0 8px rgba(255,255,255,0.8))",
+          borderLeft: "28px solid transparent", borderRight: "28px solid transparent",
+          borderTop: "44px solid #fff",
+          filter: "drop-shadow(0 0 18px rgba(255,255,255,1)) drop-shadow(0 0 10px #ffd700)",
           zIndex: 5,
         }} />
-        {/* White ring around wheel for visibility */}
-        <div style={{
-          position: "absolute", inset: -8,
-          borderRadius: "50%",
-          border: "4px solid #fff",
-          boxShadow: "0 0 40px rgba(255,255,255,0.4), inset 0 0 20px rgba(255,255,255,0.2)",
-          pointerEvents: "none",
-        }} />
-        <svg viewBox="0 0 200 200" style={{
+
+        <svg viewBox="-10 -10 220 220" style={{
           width: "100%", height: "100%",
           transform: `rotate(${rotation}deg)`,
           transition: spinning ? "transform 4s cubic-bezier(0.17, 0.67, 0.16, 0.99)" : "none",
-          filter: "drop-shadow(0 0 40px rgba(255,255,255,0.3))",
-          borderRadius: "50%",
+          filter: "drop-shadow(0 0 50px rgba(255,255,255,0.4))",
         }}>
+          <defs>
+            {/* Radial gradient overlay for depth */}
+            <radialGradient id="wheelShine" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stopColor="rgba(255,255,255,0.3)" />
+              <stop offset="40%" stopColor="rgba(255,255,255,0)" />
+              <stop offset="80%" stopColor="rgba(0,0,0,0)" />
+              <stop offset="100%" stopColor="rgba(0,0,0,0.3)" />
+            </radialGradient>
+          </defs>
+
+          {/* Outer black ring (pie chart frame) */}
+          <circle cx="100" cy="100" r="102" fill="none" stroke="#000" strokeWidth="6" />
+          {/* White rim */}
+          <circle cx="100" cy="100" r="98" fill="none" stroke="#fff" strokeWidth="4" />
+
+          {/* PIE SLICES */}
           {candidates.map((slide, i) => {
-            const theme = getTheme(i);
+            // Pull theme by slice index but cycle colors so adjacent slices differ
+            // Use a color rotation for max visual variety
+            const colorIdx = (i * 2) % THEMES.length; // step by 2 so adjacent slices contrast
+            const theme = THEMES[colorIdx];
             const startAngle = i * sliceAngle - 90;
             const endAngle = startAngle + sliceAngle;
             const startRad = (startAngle * Math.PI) / 180;
@@ -425,31 +436,45 @@ function SpinWheel({ candidates, onPick, onCancel, autoSpin = false }) {
             const largeArc = sliceAngle > 180 ? 1 : 0;
             const midAngle = (startAngle + endAngle) / 2;
             const midRad = (midAngle * Math.PI) / 180;
-            const textX = 100 + 62 * Math.cos(midRad);
-            const textY = 100 + 62 * Math.sin(midRad);
+            const textRadius = slices > 4 ? 64 : 55;
+            const textX = 100 + textRadius * Math.cos(midRad);
+            const textY = 100 + textRadius * Math.sin(midRad);
+
             return (
               <g key={i}>
+                {/* Main slice */}
                 <path
                   d={`M 100 100 L ${x1} ${y1} A 95 95 0 ${largeArc} 1 ${x2} ${y2} Z`}
-                  fill={theme.accent} stroke="#fff" strokeWidth="1.5"
+                  fill={theme.accent}
+                  stroke="#fff"
+                  strokeWidth="3"
+                  strokeLinejoin="round"
                 />
+                {/* Name on slice */}
                 <text
                   x={textX} y={textY} fill="#000"
-                  fontSize={slices > 10 ? 6 : slices > 6 ? 8 : 11}
+                  fontSize={slices > 12 ? 6 : slices > 8 ? 8 : slices > 4 ? 11 : 14}
                   fontFamily="Bungee, sans-serif" fontWeight="900"
                   textAnchor="middle" dominantBaseline="middle"
                   transform={`rotate(${midAngle + 90} ${textX} ${textY})`}
                   style={{ textTransform: "uppercase", pointerEvents: "none" }}
+                  stroke="#fff" strokeWidth="0.5"
+                  paintOrder="stroke"
                 >
-                  {slide.name.length > 10 ? slide.name.slice(0, 9) + "…" : slide.name}
+                  {slide.name.length > 11 ? slide.name.slice(0, 10) + "…" : slide.name}
                 </text>
               </g>
             );
           })}
-          {/* Center hub with glow */}
+
+          {/* Shine overlay for 3D pie chart effect */}
+          <circle cx="100" cy="100" r="95" fill="url(#wheelShine)" pointerEvents="none" />
+
+          {/* Center hub */}
+          <circle cx="100" cy="100" r="22" fill="#000" />
           <circle cx="100" cy="100" r="18" fill="#fff" stroke="#000" strokeWidth="2" />
-          <circle cx="100" cy="100" r="8" fill="#000" />
-          <circle cx="100" cy="100" r="3" fill="#fff" />
+          <circle cx="100" cy="100" r="10" fill="#000" />
+          <circle cx="100" cy="100" r="4" fill="#fff" />
         </svg>
       </div>
 
@@ -467,14 +492,18 @@ function SpinWheel({ candidates, onPick, onCancel, autoSpin = false }) {
             {spinning ? "🌀 Spinning..." : "🎡 SPIN!"}
           </button>
         )}
-        {winner && (
+        {winner && (() => {
+          const winnerIdx = candidates.indexOf(winner);
+          const winnerColorIdx = (winnerIdx * 2) % THEMES.length;
+          const winnerTheme = THEMES[winnerColorIdx];
+          return (
           <>
             <div style={{ width: "100%", textAlign: "center", marginBottom: 8 }}>
               <div style={{
                 color: "#fff", fontFamily: "'Bungee', sans-serif",
                 fontSize: "clamp(28px, 5vw, 44px)", textTransform: "uppercase",
                 animation: "popIn 0.5s cubic-bezier(0.34,1.56,0.64,1) both",
-                background: `linear-gradient(135deg, ${getTheme(candidates.indexOf(winner)).accent}, ${getTheme(candidates.indexOf(winner)).accent2})`,
+                background: `linear-gradient(135deg, ${winnerTheme.accent}, ${winnerTheme.accent2})`,
                 WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
                 filter: "drop-shadow(0 0 20px rgba(255,255,255,0.3))",
               }}>🎉 {winner.name}!</div>
@@ -483,11 +512,11 @@ function SpinWheel({ candidates, onPick, onCancel, autoSpin = false }) {
               </div>
             </div>
             <button onClick={() => onPick(winner)} style={{
-              background: getTheme(candidates.indexOf(winner)).accent,
+              background: winnerTheme.accent,
               color: "#000", border: "none", padding: "18px 36px",
               fontFamily: "'Bungee', sans-serif", fontSize: 16,
               letterSpacing: 3, textTransform: "uppercase", cursor: "pointer",
-              boxShadow: `4px 4px 0 ${getTheme(candidates.indexOf(winner)).glow}, 0 0 30px rgba(255,255,255,0.3)`,
+              boxShadow: `4px 4px 0 ${winnerTheme.glow}, 0 0 30px rgba(255,255,255,0.3)`,
             }}>▶ Present Now!</button>
             <button onClick={() => setWinner(null)} style={{
               background: "rgba(255,255,255,0.1)", color: "#fff", border: "2px solid #fff",
@@ -495,10 +524,14 @@ function SpinWheel({ candidates, onPick, onCancel, autoSpin = false }) {
               letterSpacing: 2, textTransform: "uppercase", cursor: "pointer",
             }}>🔄 Re-spin</button>
           </>
-        )}
+          );
+        })()}
       </div>
 
-      {winner && <ConfettiBurst theme={getTheme(candidates.indexOf(winner))} count={40} />}
+      {winner && (() => {
+        const winnerColorIdx = (candidates.indexOf(winner) * 2) % THEMES.length;
+        return <ConfettiBurst theme={THEMES[winnerColorIdx]} count={40} />;
+      })()}
     </div>
   );
 }
@@ -1148,29 +1181,35 @@ function HostView({ slides, onMarkPresented, onLogout, onRefresh }) {
   };
 
   const handlePresentFinish = async () => {
+    // Capture the slide being marked BEFORE clearing state
+    let slideJustPresented = null;
     if (presentingIdx !== null) {
-      const slide = slides[presentingIdx];
-      if (slide && !slide.presented) {
-        await onMarkPresented(slide.id);
-      }
+      slideJustPresented = slides[presentingIdx];
     }
     setPresentingIdx(null);
 
-    // Pull latest data from Google Sheets
+    // Mark in sheet AND wait for the request to actually fire
+    if (slideJustPresented && !slideJustPresented.presented) {
+      await onMarkPresented(slideJustPresented.id);
+    }
+
+    // Now refresh from sheet — by now the "presented" column should reflect it
     setRefreshing(true);
     await onRefresh();
     setRefreshing(false);
 
-    setTimeout(() => setAutoSpinTrigger(prev => prev + 1), 300);
+    // Brief delay so user sees the dashboard update, THEN open wheel
+    setTimeout(() => setAutoSpinTrigger(prev => prev + 1), 500);
   };
 
   useEffect(() => {
     if (autoSpinTrigger === 0) return;
-    const remaining = slides.filter(s => !s.presented);
-    if (remaining.length > 0) {
+    // Use the latest unpresented count from the most recent render
+    if (unpresented.length > 0) {
       setShowWheel(true);
     }
-  }, [autoSpinTrigger]);
+    // No else — if everything's been presented, just stay on dashboard
+  }, [autoSpinTrigger, unpresented.length]);
 
   const doRefresh = async () => {
     setRefreshing(true);
