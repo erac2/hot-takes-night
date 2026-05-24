@@ -29,13 +29,9 @@ const VIBE_EMOJIS = {
 
 // ─── Google Sheets Backend ────────────────────────────────────────────────────
 async function syncToSheets(slide) {
-  if (!SHEETS_URL) {
-    console.warn("⚠️ SHEETS_URL is empty — check your .env file and restart dev server");
-    return { ok: false, error: "No SHEETS_URL configured" };
-  }
+  if (!SHEETS_URL) return { ok: false, error: "No SHEETS_URL configured" };
   try {
-    console.log("📤 Syncing to Sheets:", SHEETS_URL.slice(0, 60) + "...");
-    const res = await fetch(SHEETS_URL, {
+    await fetch(SHEETS_URL, {
       method: "POST",
       mode: "no-cors",
       headers: { "Content-Type": "text/plain" },
@@ -52,10 +48,8 @@ async function syncToSheets(slide) {
         timestamp: new Date().toISOString(),
       }),
     });
-    console.log("✅ Sheets request sent");
     return { ok: true };
   } catch (e) {
-    console.error("❌ Sheets sync failed:", e);
     return { ok: false, error: e.message };
   }
 }
@@ -69,29 +63,17 @@ async function markPresentedInSheet(id) {
       headers: { "Content-Type": "text/plain" },
       body: JSON.stringify({ action: "markPresented", id }),
     });
-    console.log("✅ Marked presented in sheet:", id);
-  } catch (e) {
-    console.error("❌ Mark presented failed:", e);
-  }
+  } catch (e) {}
 }
 
 async function loadFromSheets() {
-  if (!SHEETS_URL) {
-    console.warn("⚠️ SHEETS_URL is empty — submissions will only save locally");
-    return [];
-  }
+  if (!SHEETS_URL) return [];
   try {
-    console.log("📥 Loading from Sheets...");
     const r = await fetch(SHEETS_URL);
-    if (!r.ok) {
-      console.error("❌ Sheets fetch returned status", r.status);
-      return [];
-    }
+    if (!r.ok) return [];
     const data = await r.json();
-    console.log("✅ Loaded", data?.count || 0, "submissions from Sheets");
     return Array.isArray(data?.slides) ? data.slides : [];
   } catch (e) {
-    console.error("❌ Sheets load failed:", e);
     return [];
   }
 }
@@ -302,7 +284,7 @@ function SpinWheel({ candidates, onPick, onCancel, autoSpin = false }) {
   const hasAutoSpun = useRef(false);
 
   const slices = candidates.length;
-  const sliceAngle = 360 / slices;
+  const sliceAngle = slices > 0 ? 360 / slices : 360;
 
   const spin = () => {
     if (spinning || slices === 0) return;
@@ -319,14 +301,15 @@ function SpinWheel({ candidates, onPick, onCancel, autoSpin = false }) {
   useEffect(() => {
     if (autoSpin && !hasAutoSpun.current && slices > 0) {
       hasAutoSpun.current = true;
-      setTimeout(() => spin(), 600); // small delay so user sees the wheel before it spins
+      const t = setTimeout(() => spin(), 700);
+      return () => clearTimeout(t);
     }
   }, [autoSpin, slices]);
 
   // Spacebar/Enter on winner screen → present
   useEffect(() => {
     const onKey = (e) => {
-      if ((e.key === " " || e.key === "Enter") && winner) {
+      if ((e.key === " " || e.key === "Enter") && winner && !spinning) {
         e.preventDefault();
         onPick(winner);
       } else if (e.key === "Escape") {
@@ -335,56 +318,99 @@ function SpinWheel({ candidates, onPick, onCancel, autoSpin = false }) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [winner, onPick, onCancel]);
+  }, [winner, spinning, onPick, onCancel]);
+
+  // Handle 0 candidates gracefully
+  if (slices === 0) {
+    return (
+      <div style={{
+        position: "fixed", inset: 0, zIndex: 9998,
+        background: "linear-gradient(135deg, #0a0a1a 0%, #1a0a1a 100%)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        padding: 20,
+      }}>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: 60, marginBottom: 16 }}>🎉</div>
+          <h2 style={{
+            color: "#fff", fontFamily: "'Bungee', sans-serif",
+            fontSize: "clamp(28px, 5vw, 44px)", margin: "0 0 12px", textTransform: "uppercase",
+          }}>All takes presented!</h2>
+          <button onClick={onCancel} style={{
+            marginTop: 20, background: "#fff", color: "#000", border: "none",
+            padding: "12px 28px", fontFamily: "'Bungee', sans-serif", fontSize: 12,
+            letterSpacing: 3, textTransform: "uppercase", cursor: "pointer",
+          }}>Close</button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{
-      position: "fixed", inset: 0, zIndex: 9998, background: "rgba(0,0,0,0.95)",
+      position: "fixed", inset: 0, zIndex: 9998,
+      background: "linear-gradient(135deg, #0a0a1a 0%, #1a0a1a 50%, #1a1a0a 100%)",
       display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
       padding: 20, overflow: "auto",
     }}>
-      {THEMES.slice(0, 5).map((t, i) => (
+      {/* Brighter rainbow orb backdrop */}
+      {THEMES.map((t, i) => (
         <div key={i} style={{
-          position: "absolute", width: 300, height: 300, borderRadius: "50%",
-          background: t.accent, opacity: 0.1, filter: "blur(60px)",
-          top: `${(i * 19) % 80}%`, left: `${(i * 23) % 80}%`,
-          animation: `floatSlow ${14 + i * 2}s ease-in-out infinite`, pointerEvents: "none",
+          position: "absolute", width: 320, height: 320, borderRadius: "50%",
+          background: t.accent, opacity: 0.18, filter: "blur(70px)",
+          top: `${(i * 14 + 5) % 75}%`, left: `${(i * 17 + 10) % 75}%`,
+          animation: `floatSlow ${12 + i * 2}s ease-in-out infinite`, pointerEvents: "none",
         }} />
       ))}
 
       <button onClick={onCancel} style={{
         position: "absolute", top: 20, right: 20,
-        background: "transparent", border: "2px solid #444", color: "#aaa",
+        background: "rgba(0,0,0,0.6)", border: "2px solid #666", color: "#fff",
         padding: "8px 14px", fontFamily: "'Bungee', sans-serif", fontSize: 11,
         letterSpacing: 2, textTransform: "uppercase", cursor: "pointer", zIndex: 3,
       }}>✕ Close</button>
 
-      <div style={{ textAlign: "center", marginBottom: 24, zIndex: 2, position: "relative" }}>
+      <div style={{ textAlign: "center", marginBottom: 28, zIndex: 2, position: "relative" }}>
         <h2 style={{
-          fontFamily: "'Bungee', sans-serif", fontSize: "clamp(28px, 5vw, 44px)", margin: 0,
+          fontFamily: "'Bungee', sans-serif", fontSize: "clamp(32px, 5.5vw, 52px)", margin: 0,
           background: `linear-gradient(90deg, ${THEMES.map(t => t.accent).join(", ")})`,
           WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
           backgroundSize: "200% 100%", animation: "rainbowShift 3s linear infinite",
           textTransform: "uppercase", letterSpacing: "-0.02em",
-        }}>🎡 Spin the Wheel!</h2>
-        <p style={{ color: "#888", fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 12, letterSpacing: 2, textTransform: "uppercase", marginTop: 8 }}>
-          {slices} unrevealed take{slices !== 1 ? "s" : ""} · who's up next?
+          filter: "drop-shadow(0 0 20px rgba(255,255,255,0.3))",
+        }}>🎡 Who's Up?</h2>
+        <p style={{ color: "#fff", fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 13, letterSpacing: 3, textTransform: "uppercase", marginTop: 10, opacity: 0.85 }}>
+          {slices} sealed take{slices !== 1 ? "s" : ""} remaining
         </p>
       </div>
 
-      <div style={{ position: "relative", width: "min(90vw, 460px)", height: "min(90vw, 460px)", zIndex: 2 }}>
+      <div style={{
+        position: "relative",
+        width: "min(85vw, 480px)", height: "min(85vw, 480px)",
+        zIndex: 2,
+      }}>
+        {/* White glowing pointer at top */}
         <div style={{
-          position: "absolute", top: -16, left: "50%", transform: "translateX(-50%)",
+          position: "absolute", top: -20, left: "50%", transform: "translateX(-50%)",
           width: 0, height: 0,
-          borderLeft: "22px solid transparent", borderRight: "22px solid transparent",
-          borderTop: "36px solid #fff",
-          filter: "drop-shadow(0 0 12px rgba(255,255,255,0.8))", zIndex: 5,
+          borderLeft: "26px solid transparent", borderRight: "26px solid transparent",
+          borderTop: "42px solid #fff",
+          filter: "drop-shadow(0 0 16px rgba(255,255,255,1)) drop-shadow(0 0 8px rgba(255,255,255,0.8))",
+          zIndex: 5,
+        }} />
+        {/* White ring around wheel for visibility */}
+        <div style={{
+          position: "absolute", inset: -8,
+          borderRadius: "50%",
+          border: "4px solid #fff",
+          boxShadow: "0 0 40px rgba(255,255,255,0.4), inset 0 0 20px rgba(255,255,255,0.2)",
+          pointerEvents: "none",
         }} />
         <svg viewBox="0 0 200 200" style={{
           width: "100%", height: "100%",
           transform: `rotate(${rotation}deg)`,
           transition: spinning ? "transform 4s cubic-bezier(0.17, 0.67, 0.16, 0.99)" : "none",
-          filter: "drop-shadow(0 0 30px rgba(255,255,255,0.2))",
+          filter: "drop-shadow(0 0 40px rgba(255,255,255,0.3))",
+          borderRadius: "50%",
         }}>
           {candidates.map((slide, i) => {
             const theme = getTheme(i);
@@ -399,18 +425,18 @@ function SpinWheel({ candidates, onPick, onCancel, autoSpin = false }) {
             const largeArc = sliceAngle > 180 ? 1 : 0;
             const midAngle = (startAngle + endAngle) / 2;
             const midRad = (midAngle * Math.PI) / 180;
-            const textX = 100 + 60 * Math.cos(midRad);
-            const textY = 100 + 60 * Math.sin(midRad);
+            const textX = 100 + 62 * Math.cos(midRad);
+            const textY = 100 + 62 * Math.sin(midRad);
             return (
               <g key={i}>
                 <path
                   d={`M 100 100 L ${x1} ${y1} A 95 95 0 ${largeArc} 1 ${x2} ${y2} Z`}
-                  fill={theme.accent} stroke="#000" strokeWidth="1"
+                  fill={theme.accent} stroke="#fff" strokeWidth="1.5"
                 />
                 <text
                   x={textX} y={textY} fill="#000"
-                  fontSize={slices > 8 ? 7 : 10}
-                  fontFamily="Bungee, sans-serif"
+                  fontSize={slices > 10 ? 6 : slices > 6 ? 8 : 11}
+                  fontFamily="Bungee, sans-serif" fontWeight="900"
                   textAnchor="middle" dominantBaseline="middle"
                   transform={`rotate(${midAngle + 90} ${textX} ${textY})`}
                   style={{ textTransform: "uppercase", pointerEvents: "none" }}
@@ -420,49 +446,52 @@ function SpinWheel({ candidates, onPick, onCancel, autoSpin = false }) {
               </g>
             );
           })}
-          <circle cx="100" cy="100" r="14" fill="#fff" stroke="#000" strokeWidth="2" />
-          <circle cx="100" cy="100" r="6" fill="#000" />
+          {/* Center hub with glow */}
+          <circle cx="100" cy="100" r="18" fill="#fff" stroke="#000" strokeWidth="2" />
+          <circle cx="100" cy="100" r="8" fill="#000" />
+          <circle cx="100" cy="100" r="3" fill="#fff" />
         </svg>
       </div>
 
-      <div style={{ marginTop: 30, display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "center", zIndex: 2 }}>
+      <div style={{ marginTop: 36, display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "center", zIndex: 2, padding: "0 20px" }}>
         {!winner && (
           <button onClick={spin} disabled={spinning} style={{
-            background: spinning ? "#222" : `linear-gradient(90deg, ${THEMES.map(t => t.accent).join(", ")})`,
+            background: spinning ? "#333" : `linear-gradient(90deg, ${THEMES.map(t => t.accent).join(", ")})`,
             backgroundSize: "200% 100%",
             animation: spinning ? "none" : "rainbowShift 3s linear infinite",
-            color: spinning ? "#888" : "#000", border: "none", padding: "16px 36px",
-            fontFamily: "'Bungee', sans-serif", fontSize: 16,
+            color: spinning ? "#aaa" : "#000", border: "none", padding: "18px 44px",
+            fontFamily: "'Bungee', sans-serif", fontSize: 18,
             letterSpacing: 3, textTransform: "uppercase", cursor: spinning ? "wait" : "pointer",
-            boxShadow: spinning ? "none" : "0 0 30px rgba(255,255,255,0.3)",
+            boxShadow: spinning ? "none" : "0 0 40px rgba(255,255,255,0.5), 4px 4px 0 rgba(0,0,0,0.4)",
           }}>
             {spinning ? "🌀 Spinning..." : "🎡 SPIN!"}
           </button>
         )}
         {winner && (
           <>
-            <div style={{ width: "100%", textAlign: "center", marginBottom: 4 }}>
+            <div style={{ width: "100%", textAlign: "center", marginBottom: 8 }}>
               <div style={{
                 color: "#fff", fontFamily: "'Bungee', sans-serif",
-                fontSize: "clamp(22px, 4vw, 32px)", textTransform: "uppercase",
+                fontSize: "clamp(28px, 5vw, 44px)", textTransform: "uppercase",
                 animation: "popIn 0.5s cubic-bezier(0.34,1.56,0.64,1) both",
                 background: `linear-gradient(135deg, ${getTheme(candidates.indexOf(winner)).accent}, ${getTheme(candidates.indexOf(winner)).accent2})`,
                 WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
+                filter: "drop-shadow(0 0 20px rgba(255,255,255,0.3))",
               }}>🎉 {winner.name}!</div>
-              <div style={{ color: "#aaa", fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 12, marginTop: 4, letterSpacing: 2, textTransform: "uppercase" }}>
-                You're up next
+              <div style={{ color: "#fff", fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 13, marginTop: 6, letterSpacing: 3, textTransform: "uppercase", opacity: 0.9 }}>
+                You're up next · Press SPACE
               </div>
             </div>
             <button onClick={() => onPick(winner)} style={{
               background: getTheme(candidates.indexOf(winner)).accent,
-              color: "#000", border: "none", padding: "16px 32px",
-              fontFamily: "'Bungee', sans-serif", fontSize: 14,
+              color: "#000", border: "none", padding: "18px 36px",
+              fontFamily: "'Bungee', sans-serif", fontSize: 16,
               letterSpacing: 3, textTransform: "uppercase", cursor: "pointer",
-              boxShadow: `4px 4px 0 ${getTheme(candidates.indexOf(winner)).glow}`,
+              boxShadow: `4px 4px 0 ${getTheme(candidates.indexOf(winner)).glow}, 0 0 30px rgba(255,255,255,0.3)`,
             }}>▶ Present Now!</button>
             <button onClick={() => setWinner(null)} style={{
-              background: "transparent", color: "#aaa", border: "2px solid #444",
-              padding: "16px 24px", fontFamily: "'Bungee', sans-serif", fontSize: 12,
+              background: "rgba(255,255,255,0.1)", color: "#fff", border: "2px solid #fff",
+              padding: "18px 28px", fontFamily: "'Bungee', sans-serif", fontSize: 13,
               letterSpacing: 2, textTransform: "uppercase", cursor: "pointer",
             }}>🔄 Re-spin</button>
           </>
@@ -901,16 +930,37 @@ function GuestView({ onSubmit, submitted, onAnother, currentSlideCount }) {
   const previewTheme = getTheme(currentSlideCount);
 
   const handleSubmit = async () => {
-    if (!name.trim() || !opinion.trim()) { setError("Fill in your name and opinion!"); return; }
-    setError(""); setLoading(true);
+    // Hard guard against double-submission
+    if (loading) return;
+    if (!name.trim() || !opinion.trim()) {
+      setError("Please fill in your name and opinion");
+      return;
+    }
+    if (name.trim().length < 2) {
+      setError("Name is too short");
+      return;
+    }
+    if (opinion.trim().length < 5) {
+      setError("Opinion is too short — give us something to work with!");
+      return;
+    }
+
+    setError("");
+    setLoading(true);
     try {
       const filteredReasons = reasons.map(r => r.trim()).filter(Boolean);
       const content = await generateSlideContent(name.trim(), opinion.trim(), filteredReasons);
-      await onSubmit({ name: name.trim(), opinion: opinion.trim(), content, id: Date.now() + Math.floor(Math.random() * 1000) });
+      await onSubmit({
+        name: name.trim(),
+        opinion: opinion.trim(),
+        content,
+        id: Date.now() + Math.floor(Math.random() * 1000),
+      });
     } catch (err) {
-      setError("Something went wrong — try again!");
+      setError("Something went wrong. Please try again.");
+      setLoading(false);
     }
-    setLoading(false);
+    // Note: loading stays true until submitted state changes; parent handles next state
   };
 
   const updateReason = (idx, val) => {
@@ -1063,7 +1113,7 @@ function GuestView({ onSubmit, submitted, onAnother, currentSlideCount }) {
           </div>
         )}
 
-        <button onClick={handleSubmit} disabled={loading}
+        <button type="button" onClick={handleSubmit} disabled={loading}
           style={{
             background: loading ? "#1a1a1a" : `linear-gradient(135deg, ${previewTheme.accent} 0%, ${previewTheme.accent2} 100%)`,
             color: loading ? "#555" : "#000",
@@ -1071,8 +1121,10 @@ function GuestView({ onSubmit, submitted, onAnother, currentSlideCount }) {
             fontFamily: "'Bungee', sans-serif", fontSize: 14, letterSpacing: 3,
             textTransform: "uppercase", cursor: loading ? "wait" : "pointer",
             boxShadow: loading ? "none" : `4px 4px 0 ${previewTheme.glow}, 0 0 30px ${previewTheme.accent}66`,
+            opacity: loading ? 0.7 : 1,
+            pointerEvents: loading ? "none" : "auto",
           }}>
-          {loading ? "⏳ Generating..." : "🔥 Lock In My Opinion →"}
+          {loading ? "⏳ Generating Your Slide..." : "🔥 Lock In My Opinion →"}
         </button>
       </div>
     </div>
@@ -1277,9 +1329,13 @@ export default function App() {
   }, []);
 
   const handleSubmit = async (slide) => {
-    // Optimistically add locally, then sync to sheet, then refresh from sheet
-    await syncToSheets(slide);
-    // Wait a beat for sheet to register, then refresh from sheet
+    // Send to Google Sheets — only place a submission gets recorded
+    const result = await syncToSheets(slide);
+    if (!result.ok) {
+      // Don't show success UI if it failed to save
+      throw new Error(result.error || "Failed to save submission");
+    }
+    // Refresh from sheet to confirm it's there
     setTimeout(refreshFromSheets, 1500);
     setSubmitted(true);
   };
