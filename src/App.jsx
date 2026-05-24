@@ -55,15 +55,19 @@ async function syncToSheets(slide) {
 }
 
 async function markPresentedInSheet(id) {
-  if (!SHEETS_URL) return;
+  if (!SHEETS_URL) return { ok: false };
+  if (!id) return { ok: false, error: "No id provided" };
   try {
     await fetch(SHEETS_URL, {
       method: "POST",
       mode: "no-cors",
       headers: { "Content-Type": "text/plain" },
-      body: JSON.stringify({ action: "markPresented", id }),
+      body: JSON.stringify({ action: "markPresented", id: String(id) }),
     });
-  } catch (e) {}
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
 }
 
 async function loadFromSheets() {
