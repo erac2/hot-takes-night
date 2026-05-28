@@ -55,16 +55,18 @@ async function syncToSheets(slide) {
 }
 
 async function markPresentedInSheet(id) {
-  if (!SHEETS_URL) return { ok: false };
+  if (!SHEETS_URL) return { ok: false, error: "No SHEETS_URL" };
   if (!id) return { ok: false, error: "No id provided" };
+
+  // Use the GET endpoint with query params instead of POST.
+  // This avoids any possibility of doPost being triggered with a missing
+  // action handler (which would create a phantom row).
   try {
-    await fetch(SHEETS_URL, {
-      method: "POST",
-      mode: "no-cors",
-      headers: { "Content-Type": "text/plain" },
-      body: JSON.stringify({ action: "markPresented", id: String(id) }),
-    });
-    return { ok: true };
+    const url = `${SHEETS_URL}?action=markPresented&id=${encodeURIComponent(String(id))}`;
+    const r = await fetch(url);
+    if (!r.ok) return { ok: false, error: `HTTP ${r.status}` };
+    const data = await r.json();
+    return { ok: data.status === "ok", data };
   } catch (e) {
     return { ok: false, error: e.message };
   }
@@ -1185,34 +1187,32 @@ function HostView({ slides, onMarkPresented, onLogout, onRefresh }) {
   };
 
   const handlePresentFinish = async () => {
-    // Capture the slide being marked BEFORE clearing state
+    // Capture the slide BEFORE clearing presenting state
     let slideJustPresented = null;
     if (presentingIdx !== null) {
       slideJustPresented = slides[presentingIdx];
     }
     setPresentingIdx(null);
 
-    // Mark in sheet AND wait for the request to actually fire
+    // Mark as presented in sheet (uses GET endpoint — safe, no phantom rows possible)
     if (slideJustPresented && !slideJustPresented.presented) {
       await onMarkPresented(slideJustPresented.id);
     }
 
-    // Now refresh from sheet — by now the "presented" column should reflect it
+    // Refresh from sheet to pull latest state (will confirm presented status)
     setRefreshing(true);
     await onRefresh();
     setRefreshing(false);
 
-    // Brief delay so user sees the dashboard update, THEN open wheel
-    setTimeout(() => setAutoSpinTrigger(prev => prev + 1), 500);
+    // Auto-open wheel after refresh
+    setTimeout(() => setAutoSpinTrigger(prev => prev + 1), 400);
   };
 
   useEffect(() => {
     if (autoSpinTrigger === 0) return;
-    // Use the latest unpresented count from the most recent render
     if (unpresented.length > 0) {
       setShowWheel(true);
     }
-    // No else — if everything's been presented, just stay on dashboard
   }, [autoSpinTrigger, unpresented.length]);
 
   const doRefresh = async () => {
@@ -1233,7 +1233,7 @@ function HostView({ slides, onMarkPresented, onLogout, onRefresh }) {
             {refreshing && <span style={{ marginLeft: 8, color: "#ff8800" }}>· syncing...</span>}
           </p>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <button onClick={doRefresh} disabled={refreshing} style={{
             background: "transparent", color: refreshing ? "#444" : "#aaa", border: "2px solid #1e1e1e",
             padding: "8px 14px", fontFamily: "'Space Grotesk', sans-serif",
@@ -1355,7 +1355,7 @@ function PasswordGate({ onUnlock }) {
 // ─── Main App ─────────────────────────────────────────────────────────────────
 export default function App() {
   const [view, setView] = useState("guest");
-  const [slides, setSlides] = useState([]); // every slide has a .presented bool from sheet
+  const [slides, setSlides] = useState([]); // from sheet, includes .presented from column J
   const [submitted, setSubmitted] = useState(false);
   const [ready, setReady] = useState(false);
 
@@ -1372,21 +1372,18 @@ export default function App() {
   }, []);
 
   const handleSubmit = async (slide) => {
-    // Send to Google Sheets — only place a submission gets recorded
     const result = await syncToSheets(slide);
-    if (!result.ok) {
-      // Don't show success UI if it failed to save
-      throw new Error(result.error || "Failed to save submission");
-    }
-    // Refresh from sheet to confirm it's there
+    if (!result.ok) throw new Error(result.error || "Failed to save submission");
     setTimeout(refreshFromSheets, 1500);
     setSubmitted(true);
   };
 
   const handleMarkPresented = async (id) => {
-    // Mark in sheet AND optimistically update local state
-    await markPresentedInSheet(id);
-    setSlides(prev => prev.map(s => s.id === id ? { ...s, presented: true } : s));
+    // Mark in sheet via the markPresented endpoint
+    const result = await markPresentedInSheet(id);
+    // Optimistically update local state for instant UI feedback
+    setSlides(prev => prev.map(s => String(s.id) === String(id) ? { ...s, presented: true } : s));
+    return result;
   };
 
   if (!ready) return (
