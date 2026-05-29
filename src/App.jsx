@@ -31,8 +31,16 @@ const VIBE_EMOJIS = {
 async function syncToSheets(slide) {
   if (!SHEETS_URL) return { ok: false, error: "No SHEETS_URL configured" };
   try {
-    // Build payload with EVERY field explicitly, even empty ones,
-    // to guarantee no column shifting on the receiving end.
+    // Random fallback burns with swag in case content is missing
+    const fallbackBurns = [
+      "And that's on PERIODT.",
+      "You ain't neva lied.",
+      "Y'all not ready for this conversation.",
+      "Say it louder for the people in the back.",
+      "It's giving truth, it's giving fact.",
+    ];
+    const randomBurn = fallbackBurns[Math.floor(Math.random() * fallbackBurns.length)];
+
     const payload = {
       action: "submit",
       id: String(slide.id || ""),
@@ -40,7 +48,7 @@ async function syncToSheets(slide) {
       opinion: String(slide.opinion || ""),
       reasons: String((slide.content?.defensePoints || []).join(" | ")),
       headline: String(slide.content?.headline || slide.opinion || ""),
-      closingBurn: String(slide.content?.closingBurn || "I said what I said."),
+      closingBurn: String(slide.content?.closingBurn || randomBurn),
       category: String(slide.content?.category || "HOT TAKE"),
       emoji: String(slide.content?.emoji || "🔥"),
       timestamp: new Date().toISOString(),
