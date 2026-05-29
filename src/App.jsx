@@ -287,11 +287,10 @@ function ComicBurst({ color, size = 200, children, style = {} }) {
 }
 
 // ─── Spin Wheel ───────────────────────────────────────────────────────────────
-function SpinWheel({ candidates, onPick, onCancel, autoSpin = false }) {
+function SpinWheel({ candidates, onPick, onCancel }) {
   const [rotation, setRotation] = useState(0);
   const [spinning, setSpinning] = useState(false);
   const [winner, setWinner] = useState(null);
-  const hasAutoSpun = useRef(false);
 
   const slices = candidates.length;
   const sliceAngle = slices > 0 ? 360 / slices : 360;
@@ -306,15 +305,6 @@ function SpinWheel({ candidates, onPick, onCancel, autoSpin = false }) {
     setRotation(prev => prev + finalRotation);
     setTimeout(() => { setSpinning(false); setWinner(candidates[targetIndex]); }, 4200);
   };
-
-  // Auto-spin on open if triggered from previous presentation
-  useEffect(() => {
-    if (autoSpin && !hasAutoSpun.current && slices > 0) {
-      hasAutoSpun.current = true;
-      const t = setTimeout(() => spin(), 700);
-      return () => clearTimeout(t);
-    }
-  }, [autoSpin, slices]);
 
   // Spacebar/Enter on winner screen → present
   useEffect(() => {
@@ -644,9 +634,9 @@ function PresenterMode({ slides, startIndex, onClose, onFinish }) {
             fontFamily: "'Bungee', sans-serif", fontSize: 16, letterSpacing: 3,
             textTransform: "uppercase", cursor: "pointer",
             boxShadow: "0 0 30px rgba(255,255,255,0.4)",
-          }}>🎡 Spin for Next!</button>
+          }}>← Back to Dashboard</button>
           <p style={{ color: "#888", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: 3, marginTop: 16, textTransform: "uppercase" }}>
-            or press <span style={{ color: "#fff", padding: "2px 8px", border: "1px solid #444", background: "#111" }}>SPACE</span> / <span style={{ color: "#fff", padding: "2px 8px", border: "1px solid #444", background: "#111" }}>→</span>
+            press <span style={{ color: "#fff", padding: "2px 8px", border: "1px solid #444", background: "#111" }}>SPACE</span> or <span style={{ color: "#fff", padding: "2px 8px", border: "1px solid #444", background: "#111" }}>ESC</span>
           </p>
         </div>
       </div>
@@ -1181,9 +1171,8 @@ function GuestView({ onSubmit, submitted, onAnother, currentSlideCount }) {
 
 // ─── Host View ────────────────────────────────────────────────────────────────
 function HostView({ slides, onMarkPresented, onLogout, onRefresh }) {
-  const [presentingIdx, setPresentingIdx] = useState(null);
+  const [presentingSlide, setPresentingSlide] = useState(null); // single slide, not idx
   const [showWheel, setShowWheel] = useState(false);
-  const [autoSpinTrigger, setAutoSpinTrigger] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
 
   const unpresented = slides.filter(s => !s.presented);
@@ -1191,38 +1180,26 @@ function HostView({ slides, onMarkPresented, onLogout, onRefresh }) {
 
   const handlePickFromWheel = (winner) => {
     setShowWheel(false);
-    const idx = slides.findIndex(s => s.id === winner.id);
-    setPresentingIdx(idx);
+    setPresentingSlide(winner);
   };
 
   const handlePresentFinish = async () => {
-    // Capture the slide BEFORE clearing presenting state
-    let slideJustPresented = null;
-    if (presentingIdx !== null) {
-      slideJustPresented = slides[presentingIdx];
-    }
-    setPresentingIdx(null);
+    // Capture the slide BEFORE clearing state
+    const slideJustPresented = presentingSlide;
+    setPresentingSlide(null);
 
-    // Mark as presented in sheet (uses GET endpoint — safe, no phantom rows possible)
+    // Mark as presented in sheet
     if (slideJustPresented && !slideJustPresented.presented) {
       await onMarkPresented(slideJustPresented.id);
     }
 
-    // Refresh from sheet to pull latest state (will confirm presented status)
+    // Refresh from sheet to pull updated presented status
     setRefreshing(true);
     await onRefresh();
     setRefreshing(false);
 
-    // Auto-open wheel after refresh
-    setTimeout(() => setAutoSpinTrigger(prev => prev + 1), 400);
+    // NO auto-spin — return to dashboard so host can click Spin when ready
   };
-
-  useEffect(() => {
-    if (autoSpinTrigger === 0) return;
-    if (unpresented.length > 0) {
-      setShowWheel(true);
-    }
-  }, [autoSpinTrigger, unpresented.length]);
 
   const doRefresh = async () => {
     setRefreshing(true);
@@ -1308,15 +1285,15 @@ function HostView({ slides, onMarkPresented, onLogout, onRefresh }) {
           candidates={unpresented}
           onPick={handlePickFromWheel}
           onCancel={() => setShowWheel(false)}
-          autoSpin={autoSpinTrigger > 0}
+          autoSpin={false}
         />
       )}
 
-      {presentingIdx !== null && (
+      {presentingSlide !== null && (
         <PresenterMode
-          slides={slides}
-          startIndex={presentingIdx * 2}
-          onClose={() => setPresentingIdx(null)}
+          slides={[presentingSlide]}
+          startIndex={0}
+          onClose={() => setPresentingSlide(null)}
           onFinish={handlePresentFinish}
         />
       )}
@@ -1388,8 +1365,13 @@ export default function App() {
   };
 
   const handleMarkPresented = async (id) => {
-    // Mark in sheet via the markPresented endpoint
+    if (!id) {
+      console.warn("⚠️ handleMarkPresented called with empty id");
+      return { ok: false, error: "Empty id" };
+    }
+    console.log("📌 Marking presented:", id, "(type:", typeof id, ")");
     const result = await markPresentedInSheet(id);
+    console.log("📌 markPresented result:", result);
     // Optimistically update local state for instant UI feedback
     setSlides(prev => prev.map(s => String(s.id) === String(id) ? { ...s, presented: true } : s));
     return result;
