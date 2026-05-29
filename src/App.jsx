@@ -2,8 +2,8 @@ import { useState, useEffect, useCallback, useRef } from "react";
 
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
 const HOST_PASSWORD = "hottest-takes-2024";
-const SHEETS_URL = import.meta.env.VITE_SHEETS_URL || "";
-const ANTHROPIC_KEY = import.meta.env.VITE_ANTHROPIC_KEY || "";
+const SHEETS_URL = (import.meta.env.VITE_SHEETS_URL || "").trim();
+const ANTHROPIC_KEY = (import.meta.env.VITE_ANTHROPIC_KEY || "").trim();
 
 const THEMES = [
   { name: "INFERNO",  bg: "#1a0000", bgGrad: "#330000", accent: "#ff2d2d", accent2: "#ff6b6b", glow: "#ff4444", text: "#fff5f0", emoji: "🔥", vibe: "SCORCHING" },
@@ -91,10 +91,23 @@ async function loadFromSheets() {
 // ─── AI: Anthropic API ────────────────────────────────────────────────────────
 async function generateSlideContent(name, opinion, userReasons) {
   const hasReasons = userReasons.length > 0;
+  // Random fallback closing burns with swag — picked at random if AI fails
+  const fallbackBurns = [
+    "And that's on PERIODT.",
+    "You ain't neva lied.",
+    "Y'all not ready for this conversation.",
+    "Argue with the wall, not me.",
+    "Say it louder for the people in the back.",
+    "It's giving truth, it's giving fact.",
+    "Sit down and take notes, baby.",
+    "If you know, you know. If you don't — that's on you.",
+    "This right here is what we not finna debate.",
+    "And I said what I said. Bye.",
+  ];
   const fallback = {
     headline: opinion,
     defensePoints: hasReasons ? userReasons : null,
-    closingBurn: "I said what I said.",
+    closingBurn: fallbackBurns[Math.floor(Math.random() * fallbackBurns.length)],
     emoji: "🔥",
     category: "HOT TAKE",
     reactions: ["🤯", "💀", "😭"],
@@ -120,29 +133,47 @@ async function generateSlideContent(name, opinion, userReasons) {
         max_tokens: 1000,
         messages: [{
           role: "user",
-          content: `You're crafting supporting content for a presentation slide for "Unpopular Opinions Night" — a fun party game. Tone is unhinged, confident, terminally online, slightly absurd. Think tweet-that-goes-viral energy.
+          content: `You're crafting a mic-drop line for a slide on "Unpopular Opinions Night" — a Black culture party game. The vibe: confident, expressive, full of swag. Think group chat after church, function with the homies, or a viral tweet that has the whole timeline screaming "PERIODT."
 
 PRESENTER: ${name}
-THE OPINION (already displayed on the slide as-is — do NOT echo it): "${opinion}"${reasonsHint}
+THE OPINION (already on the slide — do NOT echo it): "${opinion}"${reasonsHint}
 
-Your job: generate a juicy mic-drop line, emoji, category, and reactions that SUPPORT this opinion. Do NOT restate the opinion.
+Your job: deliver ONE juicy mic-drop line that GASES UP this opinion. Whether the take is wild, sharp, brave, or controversial — your line should make it land HARDER.
 
-MIC DROP (closingBurn) — make it JUICY (8-14 words):
-- The last line of a text rant — confident, weird, oddly poetic, RIDES for the take.
-- Use unexpected imagery, contradictions, or vibes-based logic.
-- DO NOT explain or justify. DO NOT moralize. Just drop the line and walk away.
-- DO NOT use "Period." or "End of story" or "Facts."
-- Examples of the vibe:
-  * "Sometimes you just gotta mind your business while kissing strangers."
-  * "I'd rather be wrong and interesting than right and boring."
-  * "The vibes were immaculate, the data was secondary."
-  * "Cry about it in 4K."
-  * "Built different, raised wrong, never apologized."
-  * "If you know, you know. If you don't, stay mad."
-- Match the topic of the actual opinion — be specific, not generic.
+🎤 MIC DROP — 8 to 16 words. THIS IS THE MOMENT.
+
+Pull from authentic AAVE / Black cultural expressions. Use real slang, not corny tryhard stuff. Examples of the energy & dialect we want:
+- "Whose mans is this?" / "Tell em why you mad"
+- "See, this right here is what we not finna do"
+- "You got the wrong one today, baby"
+- "You ain't neva lied"
+- "It's giving truth, it's giving fact, it's giving STOP THE CAP"
+- "If the shoe fits, lace it up and walk"
+- "I'm not gonna repeat myself, read it twice"
+- "Y'all not ready for this conversation"
+- "And that's on Mary had a little lamb"
+- "Argue with ya mama"
+- "Say it louder for the people in the back"
+- "Periodt. POINT BLANK. PERIOD."
+- "The receipts? In my Notes app. Try me."
+- "Sit down and take notes"
+- "Now THIS is the conversation"
+- "I been said this. Y'all just slow"
+- "If you know, you know. If you don't, that's a YOU problem"
+- "This ain't even up for debate"
+
+Match the SPECIFIC topic of the opinion. Don't be generic. Don't moralize. Don't explain the take. Just gas it up with personality.
+
+RULES:
+- 8-16 words MAX
+- Must feel authentically Black/cultural — confident, expressive, with swag
+- DO NOT use "I said what I said" — too overused, that's the fallback line we're replacing
+- DO NOT use "End of discussion" or "Case closed" — corny
+- Punctuation and capitalization can be expressive (PERIODT., baby!, etc.)
+- Match the take's energy — sharp takes get sharp lines, bold takes get bolder lines
 
 Respond with ONLY this JSON (no markdown, no backticks):
-{"closingBurn":"juicy 8-14 word mic-drop","emoji":"single emoji that matches the opinion's topic","category":"2-3 word topic like FOOD TAKE or DATING TAKE","reactions":["3 reaction emojis matching the vibe"]}
+{"closingBurn":"juicy 8-16 word mic-drop with swag","emoji":"single emoji that matches the opinion's topic","category":"2-3 word topic like FOOD TAKE or DATING TAKE","reactions":["3 reaction emojis matching the vibe"]}
 
 ${hasReasons ? "Use the presenter's reasons verbatim as the slide's defense points (handled by the app, not you)." : ""}`
         }]
@@ -164,7 +195,7 @@ ${hasReasons ? "Use the presenter's reasons verbatim as the slide's defense poin
 
     const headline = opinion; // ALWAYS use the actual opinion, never AI version
     let closingBurn = parsed.closingBurn || fallback.closingBurn;
-    if (closingBurn.split(" ").length > 16) closingBurn = closingBurn.split(" ").slice(0, 14).join(" ") + "...";
+    if (closingBurn.split(" ").length > 18) closingBurn = closingBurn.split(" ").slice(0, 16).join(" ") + "...";
 
     return {
       headline,
@@ -1365,13 +1396,8 @@ export default function App() {
   };
 
   const handleMarkPresented = async (id) => {
-    if (!id) {
-      console.warn("⚠️ handleMarkPresented called with empty id");
-      return { ok: false, error: "Empty id" };
-    }
-    console.log("📌 Marking presented:", id, "(type:", typeof id, ")");
+    if (!id) return { ok: false, error: "Empty id" };
     const result = await markPresentedInSheet(id);
-    console.log("📌 markPresented result:", result);
     // Optimistically update local state for instant UI feedback
     setSlides(prev => prev.map(s => String(s.id) === String(id) ? { ...s, presented: true } : s));
     return result;
