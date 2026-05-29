@@ -573,12 +573,17 @@ function PresenterMode({ slides, startIndex, onClose, onFinish }) {
     const onKey = (e) => {
       if (e.key === "ArrowRight" || e.key === " " || e.key === "Enter") {
         e.preventDefault();
-        // If we're already on the end slide, pressing space/enter/→ triggers next-up flow
+        // If we're on the end slide, advance to the next spin
+        // If we're mid-presentation, advance to next slide
         if (isEnd) handleClose();
         else next();
       }
       else if (e.key === "ArrowLeft") { e.preventDefault(); prev(); }
-      else if (e.key === "Escape") handleClose();
+      else if (e.key === "Escape") {
+        e.preventDefault();
+        // Esc → same as Space on end slide: close & trigger next spin
+        handleClose();
+      }
       else if (e.key === "f" || e.key === "F") {
         if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
         else document.exitFullscreen?.();
@@ -997,7 +1002,7 @@ function GuestView({ onSubmit, submitted, onAnother, currentSlideCount }) {
         name: name.trim(),
         opinion: opinion.trim(),
         content,
-        id: Date.now() + Math.floor(Math.random() * 1000),
+        id: String(Date.now()) + String(Math.floor(Math.random() * 1000)),
       });
     } catch (err) {
       setError("Something went wrong. Please try again.");
