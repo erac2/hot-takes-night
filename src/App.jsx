@@ -921,8 +921,8 @@ function PresenterMode({ slides, startIndex, onClose, onFinish }) {
           }}>★ Mic Drop ★</div>
           <p style={{
             color: theme.text, fontFamily: "'Bungee', sans-serif",
-            fontSize: "clamp(10px, 1.3vw, 16px)", lineHeight: 1.4, margin: 0,
-            textShadow: `1px 1px 0 ${theme.accent}`,
+            fontSize: "clamp(18px, 2.6vw, 32px)", lineHeight: 1.25, margin: 0,
+            textShadow: `2px 2px 0 ${theme.accent}`,
             textTransform: "uppercase", letterSpacing: "0", wordBreak: "break-word",
           }}>"{c.closingBurn}" <span style={{ color: theme.accent }}>🎤</span></p>
         </div>
