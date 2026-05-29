@@ -31,22 +31,26 @@ const VIBE_EMOJIS = {
 async function syncToSheets(slide) {
   if (!SHEETS_URL) return { ok: false, error: "No SHEETS_URL configured" };
   try {
+    // Build payload with EVERY field explicitly, even empty ones,
+    // to guarantee no column shifting on the receiving end.
+    const payload = {
+      action: "submit",
+      id: String(slide.id || ""),
+      name: String(slide.name || ""),
+      opinion: String(slide.opinion || ""),
+      reasons: String((slide.content?.defensePoints || []).join(" | ")),
+      headline: String(slide.content?.headline || slide.opinion || ""),
+      closingBurn: String(slide.content?.closingBurn || "I said what I said."),
+      category: String(slide.content?.category || "HOT TAKE"),
+      emoji: String(slide.content?.emoji || "🔥"),
+      timestamp: new Date().toISOString(),
+    };
+
     await fetch(SHEETS_URL, {
       method: "POST",
       mode: "no-cors",
       headers: { "Content-Type": "text/plain" },
-      body: JSON.stringify({
-        action: "submit",
-        id: slide.id,
-        name: slide.name,
-        opinion: slide.opinion,
-        reasons: (slide.content.defensePoints || []).join(" | "),
-        headline: slide.content.headline,
-        closingBurn: slide.content.closingBurn,
-        category: slide.content.category,
-        emoji: slide.content.emoji,
-        timestamp: new Date().toISOString(),
-      }),
+      body: JSON.stringify(payload),
     });
     return { ok: true };
   } catch (e) {
